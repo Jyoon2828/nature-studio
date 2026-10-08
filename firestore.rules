@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  // 실제 교사 이메일로 바꾸세요. 여러 교사는 배열에 추가하세요.
+  function approvedTeacher() { return signed() && request.auth.token.email_verified == true && request.auth.token.email in ['ete28@naver.com']; }
+  match /rooms/{room} {
+   function teacher() { return signed() && get(/databases/$(database)/documents/rooms/$(room)).data.teacher == request.auth.uid; }
+   function member() { return signed() && exists(/databases/$(database)/documents/rooms/$(room)/members/$(request.auth.uid)); }
+   function myGroup() { return get(/databases/$(database)/documents/rooms/$(room)/members/$(request.auth.uid)).data.group; }
+   function validGroup(g) { return g is int && g >= 1 && g <= 6; }
+   allow create: if approvedTeacher() && request.resource.data.teacher == request.auth.uid;
+   allow read: if approvedTeacher() || teacher() || member();
+   allow update,delete: if teacher();
+   match /members/{uid} {
+    allow read: if teacher() || (signed() && uid == request.auth.uid);
+    allow create: if signed() && uid == request.auth.uid && exists(/databases/$(database)/documents/rooms/$(room)) && validGroup(request.resource.data.group) && request.resource.data.name is string && request.resource.data.name.size() <= 16;
+    allow update: if signed() && uid == request.auth.uid && request.resource.data.group == resource.data.group && request.resource.data.name is string && request.resource.data.name.size() <= 16;
+    allow delete: if teacher();
+   }
+   match /artworks/{uid} {
+    allow read: if teacher() || member();
+    allow create,update: if member() && uid == request.auth.uid && request.resource.data.keys().hasOnly(['group','name','title','description','objects','updatedAt']) && request.resource.data.group == myGroup() && request.resource.data.name is string && request.resource.data.name.size() <= 16 && request.resource.data.title is string && request.resource.data.title.size() <= 30 && request.resource.data.description is string && request.resource.data.description.size() <= 120 && request.resource.data.objects is string && request.resource.data.objects.size() < 650000;
+    allow delete: if teacher() || (member() && uid == request.auth.uid);
+   }
+   match /themes/{gid} {
+    allow read: if teacher() || member();
+    allow create,update: if (teacher() || (member() && request.resource.data.group == myGroup())) && gid == string(request.resource.data.group) && validGroup(request.resource.data.group) && request.resource.data.keys().hasOnly(['group','theme','background']) && request.resource.data.theme is string && request.resource.data.theme.size() <= 40 && request.resource.data.background in ['#f5f7eb','#e0f2fa','#fff5e8','#ffffff','#1c2e40'];
+    allow delete: if teacher();
+   }
+   match /positions/{uid} {
+    allow read: if teacher() || member();
+    allow create,update: if (teacher() || (member() && get(/databases/$(database)/documents/rooms/$(room)/artworks/$(uid)).data.group == myGroup())) && request.resource.data.keys().hasOnly(['x','y','w','h','group']) && request.resource.data.group == get(/databases/$(database)/documents/rooms/$(room)/artworks/$(uid)).data.group && request.resource.data.x is number && request.resource.data.x >= 0 && request.resource.data.x <= 1400 && request.resource.data.y is number && request.resource.data.y >= 90 && request.resource.data.y <= 900 && request.resource.data.w == 350 && request.resource.data.h == 245;
+    allow delete: if teacher();
+   }
+  }
+ }
+}

@@ -1,0 +1,1 @@
+{"name":"nature-collage-studio","version":"1.0.0","private":true,"type":"module","scripts":{"check":"node --check app.js && node --check backend.js && node --check config.js","start":"python3 -m http.server 8080"}}

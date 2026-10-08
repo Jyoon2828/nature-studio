@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+const values=new Map();globalThis.localStorage=new Proxy({getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},{get:(t,k)=>k in t?t[k]:values.get(k),set:(t,k,v)=>{values.set(k,v);return true}});
+const channels=[];globalThis.BroadcastChannel=class{constructor(name){this.name=name;channels.push(this)}postMessage(data){for(const c of channels)if(c!==this&&c.name===this.name)c.onmessage?.({data:structuredClone(data)})}};
+const {readFile}=await import('node:fs/promises');
+const source=(await readFile(new URL('./backend.js',import.meta.url),'utf8')).replace("import {firebaseConfig} from './config.js';","const firebaseConfig={};");
+const {connect}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));const a=await connect(),b=await connect();let one,two;const stop=a.listen('room-one',s=>one=s);b.listen('room-one',s=>two=s);
+await a.put('room-one','artworks','uid-1',{group:1,title:'나비'});assert.equal(two.artworks['uid-1'].title,'나비');
+await b.put('room-one','artworks','uid-1',{group:1,title:'수정 나비'});assert.equal(one.artworks['uid-1'].title,'수정 나비');
+await a.put('room-two','artworks','uid-2',{group:2,title:'새'});assert.equal(two.artworks['uid-2'],undefined);
+await a.put('room-one','positions','uid-1',{x:300,y:200,w:350,h:245,group:1});assert.equal(two.positions['uid-1'].x,300);
+await a.remove('room-one','artworks','uid-1');assert.equal(two.artworks['uid-1'],undefined);stop();
+const reloaded=await connect();let saved;reloaded.listen('room-one',s=>saved=s);assert.equal(saved.positions['uid-1'].x,300);
+console.log('PASS: cross-tab create, update, delete, room isolation, position sync, persistent reload');
